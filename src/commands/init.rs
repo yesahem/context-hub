@@ -34,8 +34,6 @@ pub async fn init_repo(path: &PathBuf) -> Result<()> {
     print!("  Creating .contexthub/ directory... ");
     io::stdout().flush()?;
     std::fs::create_dir_all(&context_dir)?;
-    std::fs::create_dir_all(context_dir.join("memory/ttl"))?;
-    std::fs::create_dir_all(context_dir.join("memory/global"))?;
     std::fs::create_dir_all(context_dir.join("cache"))?;
     std::fs::create_dir_all(context_dir.join("logs"))?;
     println!("✓");

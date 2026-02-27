@@ -114,6 +114,20 @@ fn require_init(path: &PathBuf) -> Result<()> {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Initialize logger — writes to .contexthub/logs/ if initialized, else stderr
+    let log_path = {
+        let repo = get_repo_path(None);
+        let lp = repo.join(".contexthub/logs/contexthub.log");
+        if lp.parent().map(|p| p.exists()).unwrap_or(false) {
+            Some(lp)
+        } else {
+            None
+        }
+    };
+    let _ = utils::logger::init_logger(log_path);
+
+    log::info!("contexthub started: {:?}", std::env::args().collect::<Vec<_>>());
+
     match cli.command {
         Commands::Init { path } => {
             let repo_path = get_repo_path(path);

@@ -56,13 +56,16 @@ pub async fn sync_context(
     for (idx, commit) in commits.iter().enumerate() {
         println!("[{}/{}] {} - {}", idx + 1, commits.len(), &commit.short_hash,
             commit.message.lines().next().unwrap_or(""));
+        log::info!("Processing commit {} ({}/{})", &commit.short_hash, idx + 1, commits.len());
         
         match processor.process_commit(commit).await {
             Ok(context) => {
                 println!("  ✓ {}", context.summary);
+                log::info!("  ✓ {} - {}", &commit.short_hash, context.summary);
             }
             Err(e) => {
                 println!("  ✗ Error: {}", e);
+                log::error!("  ✗ {} - {}", &commit.short_hash, e);
             }
         }
     }
@@ -70,6 +73,7 @@ pub async fn sync_context(
     println!();
     let count = processor.get_context_count()?;
     println!("✓ Sync complete. Total context entries: {}", count);
+    log::info!("Sync complete. Total entries: {}", count);
 
     Ok(())
 }

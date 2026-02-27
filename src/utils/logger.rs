@@ -3,7 +3,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
 pub fn init_logger(log_path: Option<PathBuf>) -> anyhow::Result<()> {
     let mut builder = env_logger::Builder::new();
 
