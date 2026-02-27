@@ -1,1 +1,4 @@
 /target
+
+# ContextHub local data
+.contexthub/

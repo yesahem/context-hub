@@ -90,6 +90,12 @@ impl LlmProcessor {
 
         let status = response.status();
         if !status.is_success() {
+            if status == reqwest::StatusCode::NOT_FOUND {
+                return Err(anyhow::anyhow!(
+                    "Model '{}' not found. Pull it first with:\n  ollama pull {}\nOr change model: contexthub config set-model <model>",
+                    self.config.model, self.config.model
+                ));
+            }
             return Err(anyhow::anyhow!("Ollama returned error: {}", status));
         }
 
@@ -201,6 +207,27 @@ Respond ONLY with valid JSON (no other text):
             "phi3".to_string(),
         ]
     }
+}
+
+/// Fetch the list of locally available models from a running Ollama instance.
+/// Returns model names (e.g. ["llama3.2:latest", "mistral:latest"]).
+pub fn fetch_available_models(endpoint: &str) -> anyhow::Result<Vec<String>> {
+    #[derive(Deserialize)]
+    struct TagsResponse {
+        models: Vec<ModelEntry>,
+    }
+    #[derive(Deserialize)]
+    struct ModelEntry {
+        name: String,
+    }
+
+    let url = format!("{}/api/tags", endpoint);
+    let resp = reqwest::blocking::get(&url)?;
+    if !resp.status().is_success() {
+        anyhow::bail!("Ollama returned {}", resp.status());
+    }
+    let tags: TagsResponse = resp.json()?;
+    Ok(tags.models.into_iter().map(|m| m.name).collect())
 }
 
 pub fn check_ollama_installation() -> bool {
