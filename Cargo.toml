@@ -1,0 +1,33 @@
+[package]
+name = "context-hub"
+version = "0.1.0"
+edition = "2021"
+description = "Global Context Storage for AI Coding Assistants"
+authors = ["ContextHub Team"]
+license = "MIT"
+
+[[bin]]
+name = "contexthub"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+ratatui = "0.28"
+crossterm = "0.28"
+git2 = "0.19"
+rusqlite = { version = "0.32", features = ["bundled"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+directories = "5.0"
+log = "0.4"
+env_logger = "0.11"
+indicatif = "0.17"
+anyhow = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
