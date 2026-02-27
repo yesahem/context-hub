@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Init { path } => {
             let repo_path = get_repo_path(path);
-            commands::init::init_repo(&repo_path)?;
+            commands::init::init_repo(&repo_path).await?;
         }
 
         Commands::Sync { path, from, last } => {
