@@ -2,6 +2,7 @@ use git2::{DiffOptions, Repository, Sort};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CommitInfo {
     pub hash: String,
     pub short_hash: String,
@@ -52,6 +53,8 @@ impl GitAnalyzer {
         Ok(commits)
     }
 
+    /// Returns commits in the range (from_commit, to_commit], newest first.
+    /// `from_commit` is exclusive (not included), `to_commit` is inclusive.
     pub fn get_commit_range(
         &self,
         from_commit: &str,
@@ -63,31 +66,26 @@ impl GitAnalyzer {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.set_sorting(Sort::TIME | Sort::TOPOLOGICAL)?;
         revwalk.push(to_oid)?;
+        // Hide `from_oid` and all its ancestors — this gives us (from, to]
+        revwalk.hide(from_oid)?;
 
         let mut commits = Vec::new();
-        let mut found_from = false;
 
         for oid in revwalk {
             let oid = oid?;
-            if oid == from_oid {
-                found_from = true;
-            }
+            let commit = self.repo.find_commit(oid)?;
+            let hash = oid.to_string();
+            let short_hash = hash[..7.min(hash.len())].to_string();
 
-            if found_from {
-                let commit = self.repo.find_commit(oid)?;
-                let hash = oid.to_string();
-                let short_hash = hash[..7.min(hash.len())].to_string();
-
-                commits.push(CommitInfo {
-                    hash: hash.clone(),
-                    short_hash,
-                    message: commit.message().unwrap_or("").trim().to_string(),
-                    author: commit.author().name().unwrap_or("Unknown").to_string(),
-                    date: chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
-                        .unwrap_or_else(|| chrono::Utc::now()),
-                    parent_hashes: commit.parents().map(|p| p.id().to_string()).collect(),
-                });
-            }
+            commits.push(CommitInfo {
+                hash: hash.clone(),
+                short_hash,
+                message: commit.message().unwrap_or("").trim().to_string(),
+                author: commit.author().name().unwrap_or("Unknown").to_string(),
+                date: chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
+                    .unwrap_or_else(|| chrono::Utc::now()),
+                parent_hashes: commit.parents().map(|p| p.id().to_string()).collect(),
+            });
         }
 
         Ok(commits)
@@ -136,10 +134,6 @@ impl GitAnalyzer {
         Ok(revwalk.count())
     }
 
-    pub fn is_repo(&self) -> bool {
-        true
-    }
-
     pub fn get_current_commit_hash(&self) -> anyhow::Result<String> {
         let head = self.repo.head()?;
         let oid = head.target().unwrap();
@@ -150,6 +144,7 @@ impl GitAnalyzer {
         self.repo.path().join("hooks")
     }
 
+    #[allow(dead_code)]
     pub fn get_workdir(&self) -> Option<PathBuf> {
         self.repo.workdir().map(|p| p.to_path_buf())
     }

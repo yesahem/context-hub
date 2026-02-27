@@ -5,6 +5,7 @@ use anyhow::Result;
 mod commands;
 mod core;
 mod utils;
+#[allow(dead_code)]
 mod ui;
 
 #[derive(Parser)]
@@ -99,6 +100,16 @@ fn load_config(path: &PathBuf) -> Result<utils::config::Config> {
     utils::config::Config::load(path)
 }
 
+/// Guard: ensures contexthub is initialized before running a command
+fn require_init(path: &PathBuf) -> Result<()> {
+    if !commands::init::is_initialized(path) {
+        anyhow::bail!(
+            "ContextHub is not initialized in this directory.\nRun 'contexthub init' first."
+        );
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -111,12 +122,20 @@ async fn main() -> Result<()> {
 
         Commands::Sync { path, from, last } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             let config = load_config(&repo_path)?;
+            // Clean up expired TTL entries before syncing
+            let storage = core::storage::Storage::new(&repo_path.join(".contexthub/context.db"))?;
+            let expired = storage.cleanup_expired_ttl()?;
+            if expired > 0 {
+                println!("Cleaned up {} expired TTL entries", expired);
+            }
             commands::sync::sync_context(&repo_path, &config, from, last).await?;
         }
 
         Commands::Context { path, export } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             let config = load_config(&repo_path)?;
             
             if let Some(format) = export {
@@ -128,6 +147,7 @@ async fn main() -> Result<()> {
 
         Commands::Memory { path, subcommand } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             let mut config = load_config(&repo_path)?;
             
             match subcommand {
@@ -148,6 +168,7 @@ async fn main() -> Result<()> {
 
         Commands::Config { path, subcommand } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             let mut config = load_config(&repo_path)?;
             
             match subcommand {
@@ -168,6 +189,7 @@ async fn main() -> Result<()> {
 
         Commands::Hook { path, command } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             
             match command {
                 HookCommands::Install => {
@@ -187,6 +209,7 @@ async fn main() -> Result<()> {
 
         Commands::Status { path } => {
             let repo_path = get_repo_path(path);
+            require_init(&repo_path)?;
             let config = load_config(&repo_path)?;
             commands::sync::get_sync_status(&repo_path, &config)?;
         }

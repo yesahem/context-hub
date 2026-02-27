@@ -39,7 +39,32 @@ pub fn export_context(path: &PathBuf, config: &Config, format: &str) -> Result<(
     let output = match format {
         "markdown" | "md" => processor.export_context_markdown()?,
         "json" => processor.export_context_json()?,
-        _ => return Err(anyhow::anyhow!("Unsupported format: {}", format)),
+        "claude" => {
+            let content = processor.export_for_claude()?;
+            let out_path = path.join("CLAUDE.md");
+            std::fs::write(&out_path, &content)?;
+            println!("✓ Exported to {}", out_path.display());
+            return Ok(());
+        }
+        "cursor" | "cursorrules" => {
+            let content = processor.export_for_cursor()?;
+            let out_path = path.join(".cursorrules");
+            std::fs::write(&out_path, &content)?;
+            println!("✓ Exported to {}", out_path.display());
+            return Ok(());
+        }
+        "copilot" | "github-copilot" => {
+            let content = processor.export_for_copilot()?;
+            let dir = path.join(".github");
+            std::fs::create_dir_all(&dir)?;
+            let out_path = dir.join("copilot-instructions.md");
+            std::fs::write(&out_path, &content)?;
+            println!("✓ Exported to {}", out_path.display());
+            return Ok(());
+        }
+        _ => return Err(anyhow::anyhow!(
+            "Unsupported format: {}. Supported: markdown, json, claude, cursor, copilot", format
+        )),
     };
 
     println!("{}", output);

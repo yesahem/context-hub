@@ -45,18 +45,14 @@ impl LlmProcessor {
     }
 
     pub fn is_ollama_running(&self) -> bool {
-        std::process::Command::new("curl")
-            .arg("-s")
-            .arg("-o")
-            .arg("/dev/null")
-            .arg("-w")
-            .arg("%{http_code}")
-            .arg(format!("{}/api/tags", self.config.endpoint))
-            .output()
-            .map(|o| o.status.success())
+        // Use a blocking reqwest call instead of shelling out to curl
+        let url = format!("{}/api/tags", self.config.endpoint);
+        reqwest::blocking::get(&url)
+            .map(|resp| resp.status().is_success())
             .unwrap_or(false)
     }
 
+    #[allow(dead_code)]
     pub async fn check_ollama(&self) -> anyhow::Result<bool> {
         let url = format!("{}/api/tags", self.config.endpoint);
         match self.client.get(&url).send().await {
@@ -70,8 +66,9 @@ impl LlmProcessor {
         commit_message: &str,
         diff: &str,
         files_changed: &[String],
+        previous_context: Option<&str>,
     ) -> anyhow::Result<ExtractedContext> {
-        let prompt = Self::build_prompt(commit_message, diff, files_changed);
+        let prompt = Self::build_prompt(commit_message, diff, files_changed, previous_context);
         
         let request = OllamaRequest {
             model: self.config.model.clone(),
@@ -101,9 +98,22 @@ impl LlmProcessor {
         Self::parse_response(&ollama_resp.response)
     }
 
-    fn build_prompt(commit_message: &str, diff: &str, files_changed: &[String]) -> String {
-        format!(r#"You are a code context analyzer. Given a git commit diff, extract structured information about what was changed.
+    fn build_prompt(
+        commit_message: &str,
+        diff: &str,
+        files_changed: &[String],
+        previous_context: Option<&str>,
+    ) -> String {
+        let prev_section = match previous_context {
+            Some(ctx) => format!(
+                "\nPrevious Context (from the last processed commit):\n{}\n\nUse this to understand the evolving codebase and build incremental knowledge.\n",
+                ctx
+            ),
+            None => String::new(),
+        };
 
+        format!(r#"You are a code context analyzer. Given a git commit diff, extract structured information about what was changed.
+{}
 Commit Message: {}
 
 Files Changed: {}
@@ -118,7 +128,7 @@ Respond ONLY with valid JSON (no other text):
   "key_details": ["2-4 important technical details about this change"],
   "technologies": ["technologies/libraries used"],
   "impact": "high|medium|low - how significant is this change"
-}}"#, commit_message, files_changed.join(", "), diff)
+}}"#, prev_section, commit_message, files_changed.join(", "), diff)
     }
 
     fn parse_response(response: &str) -> anyhow::Result<ExtractedContext> {
@@ -171,14 +181,17 @@ Respond ONLY with valid JSON (no other text):
         })
     }
 
+    #[allow(dead_code)]
     pub fn set_model(&mut self, model: String) {
         self.config.model = model;
     }
 
+    #[allow(dead_code)]
     pub fn set_endpoint(&mut self, endpoint: String) {
         self.config.endpoint = endpoint;
     }
 
+    #[allow(dead_code)]
     pub fn get_models(&self) -> Vec<String> {
         vec![
             "llama3.2".to_string(),

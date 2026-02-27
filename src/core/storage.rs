@@ -18,6 +18,7 @@ pub struct GlobalContext {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TtlMemory {
     pub id: i64,
     pub commit_hash: String,
@@ -33,6 +34,7 @@ pub struct Storage {
 impl Storage {
     pub fn new(db_path: &PathBuf) -> anyhow::Result<Self> {
         let conn = Connection::open(db_path)?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
         let storage = Self { conn };
         storage.init_tables()?;
         Ok(storage)
@@ -82,11 +84,22 @@ impl Storage {
         Ok(())
     }
 
+    /// Check if a commit has already been processed (for dedup)
+    pub fn has_commit(&self, commit_hash: &str) -> anyhow::Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM global_context WHERE commit_hash = ?1",
+            [commit_hash],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
     pub fn store_global_context(
         &self,
         commit: &CommitInfo,
-        context: &str,
+        context_summary: &str,
         files_changed: &[String],
+        llm_extracted_json: &str,
     ) -> anyhow::Result<()> {
         let files_json = serde_json::to_string(files_changed)?;
 
@@ -98,13 +111,22 @@ impl Storage {
                 commit.hash,
                 commit.message,
                 commit.date.to_rfc3339(),
-                context,
+                context_summary,
                 files_json,
-                context,
+                llm_extracted_json,
             ],
         )?;
 
         Ok(())
+    }
+
+    /// Get the most recently stored context summary for incremental chaining
+    pub fn get_latest_context_summary(&self) -> anyhow::Result<Option<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT context_summary FROM global_context ORDER BY commit_date DESC LIMIT 1",
+        )?;
+        let result = stmt.query_row([], |row| row.get(0)).ok();
+        Ok(result)
     }
 
     pub fn get_global_context(&self) -> anyhow::Result<Vec<GlobalContext>> {
@@ -136,6 +158,7 @@ impl Storage {
         Ok(contexts)
     }
 
+    #[allow(dead_code)]
     pub fn get_global_context_since(
         &self,
         commit_hash: &str,

@@ -26,7 +26,25 @@ pub async fn sync_context(
         return Ok(());
     }
 
-    println!("Found {} commits to process", commits.len());
+    // Process oldest-first so incremental context chaining builds forward
+    let mut commits = commits;
+    commits.reverse();
+
+    // Dedup: skip commits already stored
+    let total_before_dedup = commits.len();
+    commits.retain(|c| !processor.has_commit(&c.hash).unwrap_or(false));
+    let skipped = total_before_dedup - commits.len();
+
+    if skipped > 0 {
+        println!("Skipping {} already-processed commit(s)", skipped);
+    }
+
+    if commits.is_empty() {
+        println!("All commits already processed. Nothing to sync.");
+        return Ok(());
+    }
+
+    println!("Processing {} new commit(s)...", commits.len());
     println!();
 
     if !processor.is_ollama_running() {
@@ -36,22 +54,22 @@ pub async fn sync_context(
     }
 
     for (idx, commit) in commits.iter().enumerate() {
-        println!("Processing [{}/{}] {}", idx + 1, commits.len(), &commit.short_hash);
-        println!("  Message: {}", commit.message.lines().next().unwrap_or(""));
+        println!("[{}/{}] {} - {}", idx + 1, commits.len(), &commit.short_hash,
+            commit.message.lines().next().unwrap_or(""));
         
         match processor.process_commit(commit).await {
             Ok(context) => {
-                println!("  ✓ Extracted: {}", context.summary);
+                println!("  ✓ {}", context.summary);
             }
             Err(e) => {
                 println!("  ✗ Error: {}", e);
             }
         }
-        println!();
     }
 
+    println!();
     let count = processor.get_context_count()?;
-    println!("✓ Total context entries: {}", count);
+    println!("✓ Sync complete. Total context entries: {}", count);
 
     Ok(())
 }
